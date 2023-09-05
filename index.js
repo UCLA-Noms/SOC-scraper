@@ -2,6 +2,7 @@ import fs from 'fs'
 import puppeteer from 'puppeteer-extra'
 import * as dotenv from 'dotenv'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+import jsdom from "jsdom"
 import { PUPPETEER_ARGS, SOC_NAME_LENGTH, SOC_URL, SUBJECT_CODE_TO_FULL_NAME_PATH } from './constants.js'
 dotenv.config()
 
@@ -81,6 +82,16 @@ async function captureSOCHTTPRequests(page) {
             .then(() => request.continue())
             .catch(e => { })
     })
+    // page.on('response', async response => {
+    //     const responseURL = response.url()
+    //     if (
+    //         response.resourceType() === 'xhr' &&
+    //         response.startsWith(`${SOC_URL}/Results/GetCourseSummary?`)
+    //     ) {
+    //         const content = await response.text();
+    //     }
+    //     // console.log(content)
+    // })
     await page.waitForNetworkIdle()
 
     // Click the "expand all" button
@@ -165,7 +176,7 @@ function getURLParams(url) {
 
 async function generateClassToRequestMap(browser, subjectAreaURLs) {
     const parallelRequests = 5
-    const classToRequestMap = {}
+    const classToRequestMap = {};
     const subjectAreaURLsArray = Object.entries(subjectAreaURLs)
     const subjectAreaURLsArrayLength = subjectAreaURLsArray.length
     for (let i = 0; i < subjectAreaURLsArrayLength; i += parallelRequests) {
@@ -183,15 +194,54 @@ async function generateClassToRequestMap(browser, subjectAreaURLs) {
             const { data, subjectCode } = requests[j]
             for (let k = 0; k < data.length; k++) {
                 const request = data[k]
-                const classNumber = JSON.parse(getURLParams(request).model).Path.match(/00+\w*(\w+)/);
+                const subjectCodeNoSpace = subjectCode.split(" ").join("");
+                const classNumber = JSON.parse(getURLParams(request).model).Path.match(new RegExp(`${subjectCodeNoSpace}(\\w*(\\w+))`))?.slice(1, 3);
                 console.log(JSON.parse(getURLParams(request).model).Path)
-                classToRequestMap[`${subjectCode} ${classNumber}`] = request
+                console.log(`${subjectCode} ${classNumber}`)
+                console.log(request)
+                const key = `${subjectCode} ${classNumber}`
+                if (!classToRequestMap.hasOwnProperty(key)) {
+                    classToRequestMap[key] = [request]
+                } else {
+                    classToRequestMap[key].push(request)
+                }
             }
         }
         console.log('Finished', i, 'out of', subjectAreaURLsArrayLength)
         // console.log(classToRequestMap)
     }
     return classToRequestMap
+}
+
+async function generateClassToDetailsURLMap(endpointsMap) {
+
+    // For each course, group the class details page URLs for each section type (e.g. group all lecture page urls together and all discussion page urls)
+    const classToDetailsURLMap = {}
+    for (const classCode in endpointsMap) {
+        for (const endpoint of endpointsMap[classCode]) {
+            const response = await fetch(endpoint);
+            const content = await response.text();
+            const htmlDoc = new jsdom.JSDOM(content);
+            const aObjects = htmlDoc.window.document.links;
+            for (const a of aObjects) {
+
+                // 3 letter code representing type of section, such Lec, Lab, Dis, Tut, Sem etc.
+                const sectionType = a.text.split(" ")[0]
+
+                const url = a.href
+                if (url.startsWith("/ro/")) {
+                    if (!classToDetailsURLMap.hasOwnProperty(classCode)) {                            
+                        classToDetailsURLMap[classCode] = {}
+                    }
+                    if (!classToDetailsURLMap[classCode].hasOwnProperty(sectionType)) { 
+                        classToDetailsURLMap[classCode][sectionType] = []
+                    }
+                    classToDetailsURLMap[classCode][sectionType].push("https://sa.ucla.edu" + url)
+                }
+            }
+        }
+    }
+    return classToDetailsURLMap;
 }
 
 async function main() {
@@ -209,8 +259,9 @@ async function main() {
     let i = 0;
 
     const classToRequestMap = await generateClassToRequestMap(browser, subjectAreaURLs)
+    const classToDetailsURLMap = await generateClassToDetailsURLMap(classToRequestMap)
 
-    console.log(classToRequestMap);
+    console.log(classToDetailsURLMap);
 
     await browser.close()
 }
