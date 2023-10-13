@@ -3,11 +3,13 @@ import puppeteer from 'puppeteer-extra'
 import * as dotenv from 'dotenv'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import jsdom from "jsdom"
-import { PUPPETEER_ARGS, SOC_NAME_LENGTH, SOC_URL, SUBJECT_CODE_TO_FULL_NAME_PATH } from './constants.js'
+import { CURRENT_QTR, PUPPETEER_ARGS, SOC_NAME_LENGTH, SOC_URL, SUBJECT_CODE_TO_FULL_NAME_PATH, SOC_ELEMENT_SELECTOR, SUBJECT_AREA_TO_COURSES } from './constants.js'
 dotenv.config()
 
-async function getSubjectAreasForQuarter(browser, quarterTermValue) {
-    const subjectCodeToFullName = {}
+async function getSubjectAreasForQuarter(browser, quarterTermValue, file) {
+    const subjectCodeToFullName = {
+        _quarter: quarterTermValue
+    };
     const page = await browser.newPage()
     await page.goto(SOC_URL, { waitUntil: 'networkidle0' })
 
@@ -26,13 +28,11 @@ async function getSubjectAreasForQuarter(browser, quarterTermValue) {
             .shadowRoot.querySelector('#select_filter_subject').getAttribute('options')
     }, SOC_ELEMENT_SELECTOR)
 
-    console.log(rawSubjectAreaData)
-
     for (const { value, text } of JSON.parse(rawSubjectAreaData)) {
         subjectCodeToFullName[value.trim()] = text.trim()
     }
 
-    fs.writeFileSync(SUBJECT_CODE_TO_FULL_NAME_PATH, JSON.stringify(subjectCodeToFullName, null, 2))
+    fs.writeFileSync(file, JSON.stringify(subjectCodeToFullName, null, 2))
 }
 
 export function generateSocUrl(subjectAreaLongName, subjectAreaShortName, quarter) {
@@ -41,13 +41,18 @@ export function generateSocUrl(subjectAreaLongName, subjectAreaShortName, quarte
         &t=${quarter}&sBy=subject&subj=${paddedShortName}&catlg=&cls_no=&undefined=Go&btnIsInIndex=btn_inIndex`
 }
 
-function generateSubjectAreaURLs(subjectCodeToFullName) {
-    const subjectAreaURLs = {}
-    for (const [subjectCode, subjectFullName] of Object.entries(subjectCodeToFullName)) {
-        const longSubjectName = subjectFullName.split("(")[0].trim()
-        subjectAreaURLs[subjectCode] = generateSocUrl(longSubjectName, subjectCode, '23W')
+function generateSubjectAreaURLs(subjectCodeToFullName, file) {
+    const subjectAreaURLs = {
+        _quarter: subjectCodeToFullName._quarter
     }
-    fs.writeFileSync('subjectAreaURLs.json', JSON.stringify(subjectAreaURLs, null, 2))
+    for (const [subjectCode, subjectFullName] of Object.entries(subjectCodeToFullName)) {
+        if (subjectCode === "_quarter") {
+            continue
+        }
+        const longSubjectName = subjectFullName.split("(")[0].trim()
+        subjectAreaURLs[subjectCode] = generateSocUrl(longSubjectName, subjectCode, CURRENT_QTR)
+    }
+    fs.writeFileSync(file, JSON.stringify(subjectAreaURLs, null, 2))
 }
 
 async function expandAll() {
@@ -230,10 +235,10 @@ async function generateClassToDetailsURLMap(endpointsMap) {
 
                 const url = a.href
                 if (url.startsWith("/ro/")) {
-                    if (!classToDetailsURLMap.hasOwnProperty(classCode)) {                            
+                    if (!classToDetailsURLMap.hasOwnProperty(classCode)) {
                         classToDetailsURLMap[classCode] = {}
                     }
-                    if (!classToDetailsURLMap[classCode].hasOwnProperty(sectionType)) { 
+                    if (!classToDetailsURLMap[classCode].hasOwnProperty(sectionType)) {
                         classToDetailsURLMap[classCode][sectionType] = []
                     }
                     classToDetailsURLMap[classCode][sectionType].push("https://sa.ucla.edu" + url)
@@ -244,19 +249,29 @@ async function generateClassToDetailsURLMap(endpointsMap) {
     return classToDetailsURLMap;
 }
 
+async function verifyCacheExists(file, qtr) {
+    return JSON.parse(fs.readFileSync(file))?._quarter === qtr
+}
+
 async function main() {
     puppeteer.use(StealthPlugin())
     const browser = await puppeteer.launch({
         headless: false,
         args: PUPPETEER_ARGS
     })
+    // Check if subject areas have been scraped for current quarter
+    if (!verifyCacheExists(SUBJECT_CODE_TO_FULL_NAME_PATH, CURRENT_QTR)) {
+        console.log("Getting subject areas for current quarter")
+        await getSubjectAreasForQuarter(browser, CURRENT_QTR, SUBJECT_CODE_TO_FULL_NAME_PATH)
+    }
+    const subjectCodeToFullName = JSON.parse(fs.readFileSync(SUBJECT_CODE_TO_FULL_NAME_PATH))
 
-    // await getSubjectAreasForQuarter(browser, "23W");
-    // const subjectCodeToFullName = JSON.parse(fs.readFileSync(SUBJECT_CODE_TO_FULL_NAME_PATH))
-    // generateSubjectAreaURLs(subjectCodeToFullName);
-
+    // Gather links for all courses in given subject area
+    if (!verifyCacheExists(SUBJECT_AREA_TO_COURSES, CURRENT_QTR)) {
+        console.log("Gathering subject area links")
+        generateSubjectAreaURLs(subjectCodeToFullName, SUBJECT_AREA_TO_COURSES);
+    }
     const subjectAreaURLs = JSON.parse(fs.readFileSync('subjectAreaURLs.json'))
-    let i = 0;
 
     const classToRequestMap = await generateClassToRequestMap(browser, subjectAreaURLs)
     const classToDetailsURLMap = await generateClassToDetailsURLMap(classToRequestMap)
