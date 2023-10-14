@@ -6,7 +6,7 @@ import jsdom from "jsdom"
 import { CURRENT_QTR, PUPPETEER_ARGS, SUBJECT_CODE_TO_FULL_NAME_PATH, SUBJECT_AREA_TO_COURSES, CLASS_TO_REQUEST, CLASS_TO_REQUEST_LOG, CLASS_CODE_TO_REQUEST_MAP } from './constants.js'
 import { getSubjectAreaToSOCURL } from './subjectArea.js'
 import { getCapturedSOCRequests } from './SOCRequestCapture.js'
-import { getParsedMapByClassCode } from './parser.js'
+import { getParsedMapByClassCode, parseFromSOCURL } from './parser.js'
 dotenv.config()
 
 async function main() {
@@ -40,6 +40,9 @@ async function main() {
         classToRequestMap,
         CLASS_CODE_TO_REQUEST_MAP
     );
+
+    // Example usage:
+    console.log(await parseFromSOCURL(classCodeMap["COM SCI 31"]["Lec 2"]))
 
     await browser.close()
 }

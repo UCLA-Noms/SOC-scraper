@@ -86,7 +86,6 @@ async function parseElem($, e, internalId) {
 
     // Get course name information
     const courseFullNameInfo = $(e).find('.screenReaderOnly').text().trim()
-    console.log(courseFullNameInfo)
     let {
         courseLongCategory,
         courseShortCategory,
@@ -128,9 +127,7 @@ async function parseElem($, e, internalId) {
 export async function getParsedMapByClassCode(browser, qtr, SOCRequestsRawMap, output) {
     const { _quarter: _quarter, ...temp } = SOCRequestsRawMap
     SOCRequestsRawMap = temp
-
     const compiledRequests = Object.values(SOCRequestsRawMap).flat(1)
-
 
     // ------ Broken for 23W ----------
     // When have time, fix the regex to handle new edge case (439 to ~450):
@@ -148,10 +145,15 @@ export async function getParsedMapByClassCode(browser, qtr, SOCRequestsRawMap, o
     // Broken at 3308 to ~3350
     // Broken at 3763 to ~3780
     // Broken at 3827 to ~3840
-    // Ends at 4291
+    // Ends at 4294
 
     const classToSOCRequestMapping = !fs.existsSync(output) ? { _quarter: _quarter } : JSON.parse(fs.readFileSync(output, 'utf8'));
-    let count = 3840;
+    let count = 4295;
+
+    if (count >= compiledRequests.length) {
+        return classToSOCRequestMapping
+    }
+
     for (const SOC_URL of compiledRequests.slice(count)) {
         try {
             const data = await parseFromSOCURL(SOC_URL)
