@@ -86,6 +86,7 @@ async function parseElem($, e, internalId) {
 
     // Get course name information
     const courseFullNameInfo = $(e).find('.screenReaderOnly').text().trim()
+    console.log(courseFullNameInfo)
     let {
         courseLongCategory,
         courseShortCategory,
@@ -124,14 +125,34 @@ async function parseElem($, e, internalId) {
     }
 }
 
-export async function generateClassToSOCRequestMapping() {
+export async function getParsedMapByClassCode(browser, qtr, SOCRequestsRawMap, output) {
+    const { _quarter: _quarter, ...temp } = SOCRequestsRawMap
+    SOCRequestsRawMap = temp
 
-    const SOCRequestURLs = JSON.parse(fs.readFileSync('output.valid.json', 'utf8'));
+    const compiledRequests = Object.values(SOCRequestsRawMap).flat(1)
 
-    const classToSOCRequestMapping = JSON.parse(fs.readFileSync('classToSOCRequestMapping.json', 'utf8'));
 
-    let count = 0;
-    for (const SOC_URL of SOCRequestURLs.slice(count)) {
+    // ------ Broken for 23W ----------
+    // When have time, fix the regex to handle new edge case (439 to ~450):
+    // https://sa.ucla.edu/ro/public/soc/Results/GetCourseSummary?model=%7B%22Term%22%3A%2223W%22%2C%22SubjectAreaCode%22%3A%22BIOINFO%22%2C%22CatalogNumber%22%3A%220201++++%22%2C%22IsRoot%22%3Atrue%2C%22SessionGroup%22%3A%22%25%22%2C%22ClassNumber%22%3A%22%25%22%2C%22SequenceNumber%22%3Anull%2C%22Path%22%3A%22BIOINFO0201%22%2C%22MultiListedClassFlag%22%3A%22n%22%2C%22Token%22%3A%22MDIwMSAgICBCSU9JTkZPMDIwMQ%3D%3D%22%7D&FilterFlags=%7B%22enrollment_status%22%3A%22O%2CW%2CC%2CX%2CT%2CS%22%2C%22advanced%22%3A%22y%22%2C%22meet_days%22%3A%22M%2CW%2CF%22%2C%22start_time%22%3A%2210%3A00+am%22%2C%22end_time%22%3A%226%3A00+pm%22%2C%22meet_locations%22%3Anull%2C%22meet_units%22%3Anull%2C%22instructor%22%3Anull%2C%22class_career%22%3A%22G%22%2C%22impacted%22%3A%22N%22%2C%22enrollment_restrictions%22%3A%22n%22%2C%22enforced_requisites%22%3Anull%2C%22individual_studies%22%3Anull%2C%22summer_session%22%3Anull%7D&_=1697192908216
+    // Broken at 759 to ~820
+    // Broken at 1125 to ~1170
+    // Broken at 1176 to ~1250
+    // Broken at 1703 to ~1750
+    // Broken at 2247 to ~2267
+    // Broken at 2387 to ~2400
+    // Broken at 2577 to ~2600
+    // Broken at 2720 to ~2800
+    // Broken at 2947 to ~3000
+    // Broken at 3016 to ~3100
+    // Broken at 3308 to ~3350
+    // Broken at 3763 to ~3780
+    // Broken at 3827 to ~3840
+    // Ends at 4291
+
+    const classToSOCRequestMapping = !fs.existsSync(output) ? { _quarter: _quarter } : JSON.parse(fs.readFileSync(output, 'utf8'));
+    let count = 3840;
+    for (const SOC_URL of compiledRequests.slice(count)) {
         try {
             const data = await parseFromSOCURL(SOC_URL)
             if (data === null) continue
@@ -158,7 +179,6 @@ export async function generateClassToSOCRequestMapping() {
         }
     }
 
-    fs.writeFileSync('classToSOCRequestMapping.json', JSON.stringify(classToSOCRequestMapping, null, 2))
+    fs.writeFileSync(output, JSON.stringify(classToSOCRequestMapping, null, 2))
+    return classToSOCRequestMapping;
 }
-
-// await generateClassToSOCRequestMapping();

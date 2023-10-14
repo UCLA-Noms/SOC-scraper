@@ -33,3 +33,4 @@ export const CURRENT_QTR = '23W'
 export const SUBJECT_AREA_TO_COURSES = 'subjectAreaURLs.json'
 export const CLASS_TO_REQUEST = "classToRequest.json"
 export const CLASS_TO_REQUEST_LOG = "classToRequestErrorLog.txt"
+export const CLASS_CODE_TO_REQUEST_MAP = "classCodeToRequestMap.json"

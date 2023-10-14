@@ -171,7 +171,29 @@ async function generateClassToRequestMap(browser, subjectAreaURLs, file, errLog)
     return classToRequestMap
 }
 
-export async function getCapturedSOCRequests(browser, subjectAreaURLs, qtr, output, error) {
+// Get a specific URLs requests, utility method for dealing with errors
+async function getSubjectAreaData(subjectCode, subjectAreaURL, file) {
+    const classToRequestMap = JSON.parse(fs.readFileSync(subjectAreaURL));
+    try {
+        const subjectAreaData = await captureWithPagination(browser, subjectAreaURL);
+        const capturedData = { data: subjectAreaData, subjectCode: subjectCode }
+
+        const request = data[k]
+        const subjectCodeNoSpace = subjectCode.split(" ").join("");
+        const classNumber = JSON.parse(getURLParams(request).model).Path.match(new RegExp(`${subjectCodeNoSpace}(\\w*(\\w+))`))?.slice(1, 3);
+
+        const key = `${subjectCode} ${classNumber}`
+        if (!classToRequestMap.hasOwnProperty(key)) {
+            classToRequestMap[key] = [request]
+        } else {
+            classToRequestMap[key].push(request)
+        }
+    } catch (e) {
+        console.log(`Error:  ${e}`);
+    }
+}
+
+export async function getCapturedSOCRequests(browser, qtr, subjectAreaURLs, output, error) {
     // Convert subject area URLS into raw HTTP requests
     if (!verifyCacheExists(output, qtr)) {
         console.log("Capturing all HTTP Requests From All Subject Area Pages")
