@@ -31,3 +31,5 @@ export const SOC_ELEMENT_SELECTOR = '#block-mainpagecontent > div > div > div > 
 export const SUBJECT_CODE_TO_FULL_NAME_PATH = 'subjectCodeToFullName.json'
 export const CURRENT_QTR = '23W'
 export const SUBJECT_AREA_TO_COURSES = 'subjectAreaURLs.json'
+export const CLASS_TO_REQUEST = "classToRequest.json"
+export const CLASS_TO_REQUEST_LOG = "classToRequestErrorLog.txt"
