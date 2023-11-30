@@ -2,7 +2,7 @@ import cheerio from 'cheerio'
 import axios from 'axios'
 import fs from 'fs'
 
-export async function parseFromSOCURL(SOCURL) {
+export async function parseFromSOCURL(SOCURL, browser) {
     // Request the data from the SOC URL
     const res = await axios.get(SOCURL).catch(err => console.error(err))
     if (res == null || (res.status < 200 || res.status >= 300)) {
@@ -25,10 +25,10 @@ export async function parseFromSOCURL(SOCURL) {
 
     // Get the info for each lecture
     const elems = $(`div#${classID}-children > div`).toArray()
-    const parsePromises = elems.map(async (e, index) => parseElem($, e, internalIDs[index]))
+    const parsePromises = elems.map(async (e, index) => parseElem($, e, internalIDs[index], browser))
     const classesInfo = await Promise.all(parsePromises)
 
-    return { classID, internalIDs, classesInfo }
+    return { classID, internalIDs, classesInfo       }
 }
 
 /**
@@ -44,7 +44,7 @@ const COURSE_NAME_REGEX =
     // /Select ([\w\s]+) (\(([\w\s]+)\)\s+)?([\w\d]+)\s+-\s+([\-\(\),:'\./\w\s]+) ((Lec|Lab|Sem|Dis|Tut|Act) (\d+))/
     /Select(?<courseLongCategory>[\w\s]+) (?<courseShortCategory>\(([\w\s]+)\)\s+)?(?<courseNumber>[\w\s]+)\s+-\s+(?<courseDescription>[.|!\$\?\-\(\),:"'a-zA-ZÀ-ÖÙ-öù-ÿĀ-žḀ-ỿ/\w\s]+) (?<lectureSection>(Lec|Lab|Sem|Dis|Tut|Act|Rgp|Stu|Fld|Qiz|Cli|Rec) ([\w\d]+))/
 
-async function parseElem($, e, internalId) {
+async function parseElem($, e, internalId, browser) {
     // Get if it's open & spots left
     const statusText = $(e).find(`div#${internalId}-status_data`).text().trim()
     const isOpen = statusText.includes('Open')
@@ -84,6 +84,8 @@ async function parseElem($, e, internalId) {
     const units = $(e).find(`div#${internalId}-units_data`).text().trim()
     const instructors = $(e).find(`div#${internalId}-instructor_data`).text().trim()
 
+    // Get prerequisite information
+
     // Get course name information
     const courseFullNameInfo = $(e).find('.screenReaderOnly').text().trim()
     let {
@@ -101,6 +103,42 @@ async function parseElem($, e, internalId) {
     }
     courseShortCategory = courseShortCategory.replace("(", "").replace(")", "").trim()
     lectureSection = lectureSection.replace("Class", "").trim()
+    let prereqInfoURL = null;
+    let prereqs = null;
+    if (lectureSection == "Lec 1") {
+        prereqInfoURL = "https://sa.ucla.edu/" + $(e).find(`div.cls-section.click_info > p > a:contains('Lec 1')`).attr("href")
+        console.log(prereqInfoURL)
+        const page = await browser.newPage()
+        await page.goto(prereqInfoURL)
+        await page.waitForNetworkIdle()
+        // const data = await page.evaluate(() => document.querySelector('*').outerHTML);
+
+        // console.log(data);
+        prereqs = await page.evaluate(() => {
+            // console.log(document.querySelector('*').outerHTML)
+            // const p = document.querySelector("table")?.innerHTML
+            const p = Array.from(document
+                .querySelector(
+                    'ucla-sa-soc-app'
+                )
+                .shadowRoot
+                .querySelectorAll("tr.course_requisites.scrollable-collapse > td > button.popover-right"),
+                elem => elem.getAttribute("data-content"))
+            // const p = Array.from(document.querySelectorAll("tr.course_requisites.scrollable-collapse > td > button.popover-right"), elem => elem.attr("data-content"))
+            return p
+        })
+        
+        // handle edge cases for prereq class names
+        for (const i in prereqs) {
+            if (prereqs[i] == "Software Construction Laboratory") {
+                prereqs[i] = "Software Construction" // official name in SOC is Software Construction, but is listed as Software Construction Laboratory in prereqs
+            }
+        }
+        console.log("prereqs")
+        console.log(prereqs)
+
+    }
+
 
     return {
         isOpen,
@@ -121,6 +159,7 @@ async function parseElem($, e, internalId) {
         location,
         units,
         instructors,
+        prereqs
     }
 }
 
@@ -132,23 +171,26 @@ export async function getParsedMapByClassCode(browser, qtr, SOCRequestsRawMap, o
     // ------ Broken for 23W ----------
     // When have time, fix the regex to handle new edge case (439 to ~450):
     // https://sa.ucla.edu/ro/public/soc/Results/GetCourseSummary?model=%7B%22Term%22%3A%2223W%22%2C%22SubjectAreaCode%22%3A%22BIOINFO%22%2C%22CatalogNumber%22%3A%220201++++%22%2C%22IsRoot%22%3Atrue%2C%22SessionGroup%22%3A%22%25%22%2C%22ClassNumber%22%3A%22%25%22%2C%22SequenceNumber%22%3Anull%2C%22Path%22%3A%22BIOINFO0201%22%2C%22MultiListedClassFlag%22%3A%22n%22%2C%22Token%22%3A%22MDIwMSAgICBCSU9JTkZPMDIwMQ%3D%3D%22%7D&FilterFlags=%7B%22enrollment_status%22%3A%22O%2CW%2CC%2CX%2CT%2CS%22%2C%22advanced%22%3A%22y%22%2C%22meet_days%22%3A%22M%2CW%2CF%22%2C%22start_time%22%3A%2210%3A00+am%22%2C%22end_time%22%3A%226%3A00+pm%22%2C%22meet_locations%22%3Anull%2C%22meet_units%22%3Anull%2C%22instructor%22%3Anull%2C%22class_career%22%3A%22G%22%2C%22impacted%22%3A%22N%22%2C%22enrollment_restrictions%22%3A%22n%22%2C%22enforced_requisites%22%3Anull%2C%22individual_studies%22%3Anull%2C%22summer_session%22%3Anull%7D&_=1697192908216
-    // Broken at 759 to ~820
-    // Broken at 1125 to ~1170
-    // Broken at 1176 to ~1250
-    // Broken at 1703 to ~1750
-    // Broken at 2247 to ~2267
-    // Broken at 2387 to ~2400
-    // Broken at 2577 to ~2600
-    // Broken at 2720 to ~2800
-    // Broken at 2947 to ~3000
-    // Broken at 3016 to ~3100
-    // Broken at 3308 to ~3350
-    // Broken at 3763 to ~3780
-    // Broken at 3827 to ~3840
-    // Ends at 4294
+
+    // 421-470
+    // 732-781
+    // 1069-1118
+    // 1119-1168
+    // 1258-1307
+    // 2111-2160
+    // 2237-2286
+    // 2423-2482
+    // 2485-2534
+    // 2543-2592
+    // 2711-2760
+    // 2983-3032
+    // 3071-3120
+    // 3335-3384
+    // 3877-3926
+    // 3927-2975
 
     const classToSOCRequestMapping = !fs.existsSync(output) ? { _quarter: _quarter } : JSON.parse(fs.readFileSync(output, 'utf8'));
-    let count = 4295;
+    let count = 4448;
 
     if (count >= compiledRequests.length) {
         return classToSOCRequestMapping

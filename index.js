@@ -7,12 +7,13 @@ import { CURRENT_QTR, PUPPETEER_ARGS, SUBJECT_CODE_TO_FULL_NAME_PATH, SUBJECT_AR
 import { getSubjectAreaToSOCURL } from './subjectArea.js'
 import { getCapturedSOCRequests } from './SOCRequestCapture.js'
 import { getParsedMapByClassCode, parseFromSOCURL } from './parser.js'
+import { formatData } from './formatClassData.js'
 dotenv.config()
 
 async function main() {
     puppeteer.use(StealthPlugin())
     const browser = await puppeteer.launch({
-        // headless: true,
+        headless: false,
         args: PUPPETEER_ARGS
     })
 
@@ -42,7 +43,8 @@ async function main() {
     );
 
     // Example usage:
-    console.log(await parseFromSOCURL(classCodeMap["COM SCI 31"]["Lec 2"]))
+    // console.log(await parseFromSOCURL(classCodeMap["COM SCI 31"]["Dis 2A"]));
+    console.log(JSON.stringify(await formatData(classCodeMap, browser), null, 4));
 
     await browser.close()
 }
