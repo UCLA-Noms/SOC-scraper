@@ -2,13 +2,13 @@ import { CURRENT_QTR } from "./constants.js";
 import { parseFromSOCURL } from "./parser.js";
 
 export async function formatData(classCodeMap, browser) {
-    // console.log(classCodeMap);
     let count = 0;
     let res = {"classes": {}};
     for (const cls in classCodeMap) {
-        if (cls != "COM SCI 31") {
+        if (!cls.startsWith("COM SCI") || !classCodeMap[cls].hasOwnProperty("Lec 1")) {
             continue;
         }
+        console.log(classCodeMap[cls]);
         const initialInfo = await parseFromSOCURL(classCodeMap[cls]["Lec 1"], browser);
         // console.log(initialInfo)
         res["classes"][cls] = {
@@ -19,9 +19,9 @@ export async function formatData(classCodeMap, browser) {
             "lectures": {},
             "prereqs": initialInfo["classesInfo"][0]["prereqs"]
         };
-        if (count == 1) {
-            break;
-        }
+        // if (count == 1) {
+        //     break;
+        // }
         const sectionNumberMap = {};
         for (const section in classCodeMap[cls]) {      
             const sectionNumber = parseInt(section.split(" ")[1]);

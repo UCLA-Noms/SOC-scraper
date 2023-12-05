@@ -8,6 +8,7 @@ import { getSubjectAreaToSOCURL } from './subjectArea.js'
 import { getCapturedSOCRequests } from './SOCRequestCapture.js'
 import { getParsedMapByClassCode, parseFromSOCURL } from './parser.js'
 import { formatData } from './formatClassData.js'
+import importFromJSON from "./neo4j.js"
 dotenv.config()
 
 async function main() {
@@ -44,7 +45,9 @@ async function main() {
 
     // Example usage:
     // console.log(await parseFromSOCURL(classCodeMap["COM SCI 31"]["Dis 2A"]));
-    console.log(JSON.stringify(await formatData(classCodeMap, browser), null, 4));
+    const data = await formatData(classCodeMap, browser);
+    
+    await importFromJSON(data);
 
     await browser.close()
 }
